@@ -1,0 +1,43 @@
+import signal
+import sys
+import threading
+
+from app.core.config import settings
+from app.core.logging import get_logger, setup_logging
+from app.workers.executor import JobExecutor
+from app.workers.poller import JobPoller
+
+logger = get_logger(__name__)
+
+
+def main() -> None:
+    setup_logging()
+
+    if not settings.WORKER_ENABLED:
+        logger.error("WORKER_ENABLED is false; exiting")
+        sys.exit(1)
+
+    shutdown_event = threading.Event()
+    executor = JobExecutor()
+    poller = JobPoller(executor, shutdown_event)
+
+    def handle_shutdown(signum: int, _frame: object) -> None:
+        signal_name = signal.Signals(signum).name
+        logger.info("Shutdown signal received signal=%s", signal_name)
+        shutdown_event.set()
+
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
+
+    logger.info("airo-ai worker starting")
+
+    try:
+        poller.run()
+    finally:
+        logger.info("Shutting down executor")
+        executor.shutdown(wait=True)
+        logger.info("airo-ai worker stopped")
+
+
+if __name__ == "__main__":
+    main()
