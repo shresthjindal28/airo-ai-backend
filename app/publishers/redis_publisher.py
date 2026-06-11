@@ -8,8 +8,6 @@ from app.schemas.transcript_event import TranscriptEvent
 
 logger = get_logger(__name__)
 
-TRANSCRIPT_EVENTS_CHANNEL = "airo:transcript:events"
-
 
 class TranscriptEventPublisher:
 
@@ -21,7 +19,10 @@ class TranscriptEventPublisher:
 
     def publish(self, event: TranscriptEvent) -> None:
         payload = event.model_dump(mode="json")
-        self._client.publish(TRANSCRIPT_EVENTS_CHANNEL, json.dumps(payload))
+        self._client.publish(
+            settings.TRANSCRIPT_EVENTS_CHANNEL,
+            json.dumps(payload),
+        )
         logger.info(
             "Published transcript event type=%s session_id=%s",
             event.type,
