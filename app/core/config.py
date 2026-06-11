@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     SARVAM_MODEL: str = "saaras:v3"
     SARVAM_MODE: str = "transcribe"
 
+    EMBEDDING_PROVIDER: str = "local"
+    EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
+    EMBEDDING_DIMENSIONS: int = 384
+    HF_TOKEN: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

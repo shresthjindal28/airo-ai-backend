@@ -31,6 +31,11 @@ def main() -> None:
 
     logger.info("airo-ai worker starting")
 
+    if settings.EMBEDDING_PROVIDER.lower() == "local":
+        from app.providers.embeddings.local_provider import preload_embedding_model
+
+        preload_embedding_model()
+
     try:
         poller.run()
     finally:

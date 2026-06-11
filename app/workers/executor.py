@@ -6,6 +6,7 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
+from app.jobs.memory_ingestion import MemoryIngestionJob
 from app.jobs.soap_generation import SOAPGenerationJob
 from app.jobs.transcript_finalize import TranscriptFinalizeJob
 from app.jobs.transcription import TranscriptionJob
@@ -26,6 +27,7 @@ def _get_handlers() -> dict[AIJobType, object]:
             AIJobType.transcription: TranscriptionJob(),
             AIJobType.transcript_finalize: TranscriptFinalizeJob(),
             AIJobType.soap_generation: SOAPGenerationJob(),
+            AIJobType.memory_ingestion: MemoryIngestionJob(),
         }
     return _HANDLERS
 

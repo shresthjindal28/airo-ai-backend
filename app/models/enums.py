@@ -29,6 +29,15 @@ class AIJobType(str, enum.Enum):
     soap_generation = "soap_generation"
     summary_generation = "summary_generation"
     clinical_insights = "clinical_insights"
+    memory_ingestion = "memory_ingestion"
+
+
+class MemorySourceType(str, enum.Enum):
+    transcript = "transcript"
+    soap_note = "soap_note"
+    consultation_document = "consultation_document"
+    clinical_summary = "clinical_summary"
+    doctor_note = "doctor_note"
 
 
 class AIJobStatus(str, enum.Enum):

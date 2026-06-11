@@ -8,6 +8,9 @@ from app.publishers.redis_publisher import TranscriptEventPublisher
 from app.realtime.merge_buffer import OrderedMergeBuffer
 from app.realtime.missing_chunk_tracker import MissingChunkTracker
 from app.realtime.session_state import session_state_registry
+from app.models.enums import AIJobStatus, AIJobType, JobPriority
+from app.repositories.ai_job_repository import AIJobRepository
+from app.repositories.consultation_repository import ConsultationRepository
 from app.repositories.consultation_session_repository import (
     ConsultationSessionRepository,
 )
@@ -97,6 +100,25 @@ class TranscriptFinalizer:
         )
 
         session_state_registry.clear(job.session_id)
+
+        consultation = ConsultationRepository.get_consultation_by_id(
+            db,
+            job.consultation_id,
+        )
+        if consultation is not None:
+            AIJobRepository.create_job(
+                db,
+                consultation_id=job.consultation_id,
+                job_type=AIJobType.memory_ingestion,
+                session_id=job.session_id,
+                priority=JobPriority.normal,
+                metadata={
+                    "patient_id": str(consultation.patient_id),
+                    "source_type": "transcript",
+                    "source_id": str(transcript.id),
+                },
+                status=AIJobStatus.queued,
+            )
 
         logger.info(
             "Transcript finalized session_id=%s segments=%s missing=%s chars=%s",

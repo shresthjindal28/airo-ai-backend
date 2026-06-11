@@ -4,11 +4,36 @@ from datetime import UTC, datetime
 from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
+from typing import Any
+
 from app.models.ai_job import AIJob
-from app.models.enums import AIJobStatus, JobPriority
+from app.models.enums import AIJobStatus, AIJobType, JobPriority
 
 
 class AIJobRepository:
+
+    @staticmethod
+    def create_job(
+        db: Session,
+        consultation_id: uuid.UUID,
+        job_type: AIJobType,
+        session_id: uuid.UUID | None = None,
+        priority: JobPriority = JobPriority.normal,
+        metadata: dict[str, Any] | None = None,
+        status: AIJobStatus = AIJobStatus.pending,
+    ) -> AIJob:
+        job = AIJob(
+            consultation_id=consultation_id,
+            session_id=session_id,
+            job_type=job_type,
+            priority=priority,
+            metadata_=metadata,
+            status=status,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job
 
     @staticmethod
     def get_job_by_id(db: Session, job_id: uuid.UUID) -> AIJob | None:
