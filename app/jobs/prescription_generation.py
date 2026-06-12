@@ -2,22 +2,22 @@ from app.core.database import SessionLocal
 from app.core.logging import get_logger
 from app.jobs.base import JobHandler
 from app.models.ai_job import AIJob
-from app.services.soap_generation_service import (
-    SOAPGenerationService,
-    SOAPGenerationServiceError,
+from app.services.prescription_generation_service import (
+    PrescriptionGenerationService,
+    PrescriptionGenerationServiceError,
 )
 
 logger = get_logger(__name__)
 
 
-class SOAPGenerationJob(JobHandler):
+class PrescriptionGenerationJob(JobHandler):
 
     def __init__(self) -> None:
-        self._service = SOAPGenerationService()
+        self._service = PrescriptionGenerationService()
 
     def run(self, job: AIJob) -> None:
         logger.info(
-            "Starting soap_generation job job_id=%s consultation_id=%s",
+            "Starting prescription_generation job job_id=%s consultation_id=%s",
             job.id,
             job.consultation_id,
         )
@@ -25,9 +25,9 @@ class SOAPGenerationJob(JobHandler):
         db = SessionLocal()
         try:
             self._service.generate(db, job)
-        except SOAPGenerationServiceError:
+        except PrescriptionGenerationServiceError:
             raise
         finally:
             db.close()
 
-        logger.info("Completed soap_generation job job_id=%s", job.id)
+        logger.info("Completed prescription_generation job job_id=%s", job.id)

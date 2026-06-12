@@ -27,6 +27,7 @@ class AIJobType(str, enum.Enum):
     transcription = "transcription"
     transcript_finalize = "transcript_finalize"
     soap_generation = "soap_generation"
+    prescription_generation = "prescription_generation"
     summary_generation = "summary_generation"
     clinical_insights = "clinical_insights"
     memory_ingestion = "memory_ingestion"

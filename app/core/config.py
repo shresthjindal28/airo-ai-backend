@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     HF_TOKEN: str | None = None
     OPENAI_API_KEY: str | None = None
 
+    SOAP_LLM_PROVIDER: str = "auto"
+    SOAP_LLM_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
+    SOAP_LLM_MAX_TOKENS: int = 1200
+
+    PRESCRIPTION_PROVIDER: str = "huggingface"
+    PRESCRIPTION_LLM_PROVIDER: str = "auto"
+    PRESCRIPTION_LLM_MODEL: str = "Qwen/Qwen2.5-7B-Instruct"
+    PRESCRIPTION_LLM_MAX_TOKENS: int = 2000
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

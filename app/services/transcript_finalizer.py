@@ -116,6 +116,15 @@ class TranscriptFinalizer:
             AIJobRepository.create_job(
                 db,
                 consultation_id=job.consultation_id,
+                job_type=AIJobType.soap_generation,
+                session_id=job.session_id,
+                priority=JobPriority.high,
+                metadata=None,
+                status=AIJobStatus.queued,
+            )
+            AIJobRepository.create_job(
+                db,
+                consultation_id=job.consultation_id,
                 job_type=AIJobType.memory_ingestion,
                 session_id=job.session_id,
                 priority=JobPriority.normal,

@@ -8,3 +8,4 @@ redis>=5.0.0
 sarvamai>=0.1.0
 pgvector>=0.3.0
 sentence-transformers>=2.7.0
+huggingface_hub>=0.26.0
