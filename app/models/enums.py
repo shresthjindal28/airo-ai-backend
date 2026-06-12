@@ -31,6 +31,9 @@ class AIJobType(str, enum.Enum):
     summary_generation = "summary_generation"
     clinical_insights = "clinical_insights"
     memory_ingestion = "memory_ingestion"
+    timeline_generation = "timeline_generation"
+    patient_briefing_generation = "patient_briefing_generation"
+    memory_reindex = "memory_reindex"
 
 
 class MemorySourceType(str, enum.Enum):

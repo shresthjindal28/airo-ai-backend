@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     REDIS_URL: str
     TRANSCRIPT_EVENTS_CHANNEL: str
+    REDIS_PATIENT_CACHE_TTL_SECONDS: int = 900
+    REDIS_TIMELINE_CACHE_TTL_SECONDS: int = 1800
 
     R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY_ID: str = ""

@@ -143,6 +143,17 @@ class MemoryIngestionService:
             resource_id=profile.id,
         )
 
+        try:
+            from app.cache.invalidation import invalidate_patient_caches
+
+            invalidate_patient_caches(patient_id)
+        except Exception:
+            logger.warning(
+                "Failed to invalidate patient caches patient_id=%s",
+                patient_id,
+                exc_info=True,
+            )
+
         logger.info(
             "Memory ingested document_id=%s patient_id=%s chunks=%s",
             document.id,
