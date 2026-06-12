@@ -12,43 +12,76 @@ from app.providers.prescription.html_utils import extract_html_document
 
 logger = get_logger(__name__)
 
-SYSTEM_PROMPT = """You are a clinical prescription documentation assistant.
-Generate a medical prescription as STRICT HTML only.
+SYSTEM_PROMPT = """You are a certified clinical documentation system generating legally formatted medical prescriptions.
 
-Rules:
-- Output ONLY valid HTML. No markdown. No JSON. No explanations.
-- Use only medications and clinical details present in the SOAP note.
-- Do not invent drugs, doses, or diagnoses not supported by the SOAP note.
-- If a section lacks data, write a brief clinically appropriate placeholder.
-- Use semantic HTML: header, section, table, p, strong, ul, li.
-- Include these sections in order:
-  1. Hospital header
-  2. Patient details (name, age, gender, date)
-  3. Diagnosis
-  4. Medication table with columns: Medicine, Dosage, Frequency, Duration
-  5. Instructions
-  6. Warnings
-  7. Follow-up
-  8. Doctor signature block
+OUTPUT FORMAT:
+- Output ONLY raw HTML. No markdown. No backticks. No explanations. No comments.
+- Start directly with <!DOCTYPE html>. End with </html>. Nothing before or after.
+- Use inline CSS only (no <style> tags, no external CSS).
+
+CLINICAL RULES:
+- Use ONLY medications, diagnoses, and data explicitly present in the SOAP note.
+- NEVER invent, infer, or assume any drug, dose, frequency, or diagnosis not stated.
+- If any field is missing or unclear, write: "Not documented — consult physician."
+- Drug names must be generic (INN) followed by brand name in parentheses if known.
+- Dosage must include: amount (mg/ml/units), route (oral/IV/topical), frequency, duration.
+- Contraindications and warnings must be listed for every medication prescribed.
+
+SEVERITY COLOR CODING (apply inline style to relevant rows/sections):
+- CRITICAL severity (e.g. immediate risk, controlled substances, high-dose): background-color:#fff0f0; border-left:4px solid #dc2626; color:#7f1d1d
+- HIGH severity (e.g. antibiotics, steroids, anticoagulants): background-color:#fff7ed; border-left:4px solid #ea580c; color:#7c2d12
+- MODERATE severity (e.g. analgesics, antihypertensives): background-color:#fefce8; border-left:4px solid #ca8a04; color:#713f12
+- LOW severity (e.g. vitamins, OTC supplements, topicals): background-color:#f0fdf4; border-left:4px solid #16a34a; color:#14532d
+- Apply severity to each medication table row individually based on the drug class.
+
+REQUIRED HTML STRUCTURE (in this exact order):
+1. Document header: hospital logo placeholder, hospital name, address, phone, registration number
+2. Prescription metadata: Rx number (generate as RX-YYYYMMDD-001), date, doctor name, qualification, registration
+3. Patient details: name, age, gender, blood group if available, date of birth if available
+4. Chief complaint + provisional diagnosis (bold, large font, color:#1e3a5f)
+5. Medication table with columns: #, Medicine (Generic + Brand), Dosage & Route, Frequency, Duration, Severity — apply row color per severity
+6. Special instructions per medication (numbered, matching table row)
+7. General instructions (diet, rest, hydration, activity restrictions)
+8. Warnings & contraindications box (red border, background:#fff5f5)
+9. Follow-up date and conditions requiring immediate ER visit
+10. Doctor signature block: name, qualification, registration, hospital, date, and a placeholder signature line
+
+FORMATTING:
+- Use a clean professional A4-like layout (max-width:800px, margin:auto, font-family:Georgia,serif)
+- Section headers: font-size:13px; font-weight:bold; text-transform:uppercase; color:#1e3a5f; border-bottom:2px solid #1e3a5f
+- Prescription header background: #1e3a5f; color:white; padding:20px
+- Table: width:100%; border-collapse:collapse; font-size:12px
+- Table headers: background:#1e3a5f; color:white; padding:8px
+- Footer: font-size:10px; color:#6b7280; text-align:center; border-top:1px solid #e5e7eb
+- Add a red diagonal watermark text "PRESCRIPTION — KEEP SAFELY" using CSS position:fixed; opacity:0.04; font-size:80px; transform:rotate(-45deg)
 """
 
-USER_PROMPT_TEMPLATE = """Hospital: {hospital_name}
+USER_PROMPT_TEMPLATE = """Generate a complete medical prescription HTML document with the following data:
+
+HOSPITAL:
+Name: {hospital_name}
 Doctor: {doctor_name}
+Qualification: {doctor_qualification}
 Registration: {doctor_registration}
 Date: {consultation_date}
 
-Patient: {patient_name}
+PATIENT:
+Name: {patient_name}
 Age: {patient_age}
 Gender: {patient_gender}
-Chief complaint: {chief_complaint}
+Chief Complaint: {chief_complaint}
 
-SOAP NOTE (sole clinical source):
+SOAP NOTE (only clinical source — do not invent anything outside this):
 Subjective: {subjective}
 Objective: {objective}
 Assessment: {assessment}
 Plan: {plan}
 
-Return the prescription as HTML only."""
+STRICT REQUIREMENTS:
+- Apply severity color coding to each medication row.
+- Include contraindications for every drug.
+- Every missing field must say "Not documented — consult physician."
+- Output raw HTML only. No markdown. No explanation."""
 
 
 class HuggingFacePrescriptionProvider(PrescriptionProvider):
@@ -67,14 +100,15 @@ class HuggingFacePrescriptionProvider(PrescriptionProvider):
         )
 
         prompt = USER_PROMPT_TEMPLATE.format(
-            hospital_name=context.hospital_name or "AIRO Clinical",
+            hospital_name=context.hospital_name or "AIRO Clinical Centre",
             doctor_name=context.doctor_name,
-            doctor_registration=context.doctor_registration or "—",
+            doctor_qualification=getattr(context, "doctor_qualification", "MBBS, MD"),
+            doctor_registration=context.doctor_registration or "Not documented — consult physician",
             consultation_date=context.consultation_date,
             patient_name=context.patient_name,
             patient_age=context.patient_age,
             patient_gender=context.patient_gender,
-            chief_complaint=context.chief_complaint or "—",
+            chief_complaint=context.chief_complaint or "Not documented — consult physician",
             subjective=context.subjective or "Not documented.",
             objective=context.objective or "Not documented.",
             assessment=context.assessment or "Not documented.",
@@ -89,7 +123,7 @@ class HuggingFacePrescriptionProvider(PrescriptionProvider):
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=settings.PRESCRIPTION_LLM_MAX_TOKENS,
-                temperature=0.2,
+                temperature=0.1,  # lower = more deterministic, less hallucination
             )
         except HfHubHTTPError as exc:
             logger.error("Hugging Face prescription generation failed: %s", exc)
