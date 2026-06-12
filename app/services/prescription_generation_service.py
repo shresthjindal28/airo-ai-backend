@@ -45,7 +45,17 @@ class PrescriptionGenerationService:
         context = self._build_context(db, job, soap_note)
         regenerate = bool((job.metadata_ or {}).get("regenerate"))
 
-        existing = PrescriptionRepository.get_by_consultation(db, job.consultation_id)
+        consultation = ConsultationRepository.get_consultation_by_id(
+            db,
+            job.consultation_id,
+        )
+        if consultation is None:
+            raise PrescriptionGenerationServiceError("Consultation not found")
+
+        existing = PrescriptionRepository.get_current_by_consultation(
+            db,
+            job.consultation_id,
+        )
         if existing and not regenerate:
             logger.info(
                 "Prescription already exists consultation_id=%s — skipping",
@@ -64,21 +74,41 @@ class PrescriptionGenerationService:
             provider_name = "fallback:template"
 
         plain_text = html_to_plain_text(html_content)
+        metadata = job.metadata_ or {}
+        soap_note_id_raw = metadata.get("soap_note_id")
 
         if existing and regenerate:
-            prescription = PrescriptionRepository.update_prescription(
-                db,
-                existing,
-                html_content=html_content,
-                plain_text_content=plain_text,
-                generation_provider=provider_name,
-                generation_version=GENERATION_VERSION,
-            )
-            action = "PRESCRIPTION_UPDATED"
+            if existing.is_approved:
+                prescription = PrescriptionRepository.create_version_from_parent(
+                    db,
+                    existing,
+                    html_content=html_content,
+                    plain_text_content=plain_text,
+                    generation_provider=provider_name,
+                    generation_version=GENERATION_VERSION,
+                )
+                action = "PRESCRIPTION_VERSION_CREATED"
+            else:
+                prescription = PrescriptionRepository.update_prescription(
+                    db,
+                    existing,
+                    html_content=html_content,
+                    plain_text_content=plain_text,
+                    generation_provider=provider_name,
+                    generation_version=GENERATION_VERSION,
+                )
+                action = "PRESCRIPTION_UPDATED"
         else:
             prescription = PrescriptionRepository.create_prescription(
                 db,
+                doctor_id=consultation.doctor_id,
+                patient_id=consultation.patient_id,
                 consultation_id=job.consultation_id,
+                soap_note_id=(
+                    uuid.UUID(str(soap_note_id_raw))
+                    if soap_note_id_raw
+                    else soap_note.id
+                ),
                 html_content=html_content,
                 plain_text_content=plain_text,
                 generation_provider=provider_name,

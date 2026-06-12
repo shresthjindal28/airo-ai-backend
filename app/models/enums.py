@@ -36,6 +36,7 @@ class AIJobType(str, enum.Enum):
 class MemorySourceType(str, enum.Enum):
     transcript = "transcript"
     soap_note = "soap_note"
+    prescription = "prescription"
     consultation_document = "consultation_document"
     clinical_summary = "clinical_summary"
     doctor_note = "doctor_note"

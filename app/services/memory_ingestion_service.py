@@ -12,6 +12,7 @@ from app.models.enums import MemorySourceType
 from app.models.memory_chunk import MemoryChunk
 from app.models.memory_document import MemoryDocument
 from app.models.patient_memory_profile import PatientMemoryProfile
+from app.models.prescription import Prescription
 from app.models.soap_note import SOAPNote
 from app.providers.embeddings.base import EmbeddingProvider
 from app.providers.embeddings.registry import get_embedding_provider
@@ -213,7 +214,49 @@ class MemoryIngestionService:
             return (
                 "SOAP Note",
                 "\n\n".join(content_parts),
-                {"approved": soap_note.approved_by_doctor},
+                {
+                    "approved": soap_note.approved_by_doctor,
+                    "document_type": "soap_note",
+                    "soap_note_id": str(soap_note.id),
+                    "consultation_id": str(soap_note.consultation_id),
+                },
+            )
+
+        if source_type == MemorySourceType.prescription:
+            prescription = db.get(Prescription, source_id)
+            if prescription is None:
+                raise MemoryIngestionError(f"Prescription not found: {source_id}")
+
+            if not prescription.is_approved:
+                raise MemoryIngestionError(
+                    "Only approved prescriptions can be ingested into patient memory"
+                )
+
+            content = (prescription.plain_text_content or "").strip()
+            if not content:
+                from app.providers.prescription.html_utils import html_to_plain_text
+
+                content = html_to_plain_text(prescription.html_content).strip()
+            if not content:
+                raise MemoryIngestionError("Prescription has no content to ingest")
+
+            return (
+                f"Prescription v{prescription.version_number}",
+                content,
+                {
+                    "patient_id": str(prescription.patient_id),
+                    "doctor_id": str(prescription.doctor_id),
+                    "consultation_id": str(prescription.consultation_id),
+                    "prescription_id": str(prescription.id),
+                    "soap_note_id": (
+                        str(prescription.soap_note_id)
+                        if prescription.soap_note_id
+                        else None
+                    ),
+                    "document_type": "prescription",
+                    "approved": prescription.is_approved,
+                    "version_number": prescription.version_number,
+                },
             )
 
         raise MemoryIngestionError(f"Unsupported memory source type: {source_type}")
