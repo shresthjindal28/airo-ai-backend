@@ -62,39 +62,46 @@ class TranscriptFinalizer:
         merged_text = merge_buffer.merged_text()
         missing_chunks = missing_tracker.missing_chunks()
 
-        if not merged_text.strip() and not segments:
-            raise TranscriptFinalizerError("No transcript segments found for session")
+        if not segments:
+            logger.warning(
+                "No transcript segments for session_id=%s — finalizing empty transcript",
+                job.session_id,
+            )
+            merged_text = ""
 
         language = "en"
         existing = TranscriptRepository.get_by_consultation(db, job.consultation_id)
-        transcript = TranscriptRepository.upsert_transcript(
-            db,
-            consultation_id=job.consultation_id,
-            transcript_text=merged_text,
-            language=language,
-        )
+        transcript = None
 
-        AuditService.log_doctor_action(
-            db,
-            doctor_id=session.doctor_id,
-            action="TRANSCRIPT_CREATED" if existing is None else "TRANSCRIPT_UPDATED",
-            resource_type="transcript",
-            resource_id=transcript.id,
-        )
-        AuditService.log_doctor_action(
-            db,
-            doctor_id=session.doctor_id,
-            action="TRANSCRIPT_FINALIZED",
-            resource_type="transcript",
-            resource_id=transcript.id,
-        )
+        if merged_text.strip():
+            transcript = TranscriptRepository.upsert_transcript(
+                db,
+                consultation_id=job.consultation_id,
+                transcript_text=merged_text,
+                language=language,
+            )
+
+            AuditService.log_doctor_action(
+                db,
+                doctor_id=session.doctor_id,
+                action="TRANSCRIPT_CREATED" if existing is None else "TRANSCRIPT_UPDATED",
+                resource_type="transcript",
+                resource_id=transcript.id,
+            )
+            AuditService.log_doctor_action(
+                db,
+                doctor_id=session.doctor_id,
+                action="TRANSCRIPT_FINALIZED",
+                resource_type="transcript",
+                resource_id=transcript.id,
+            )
 
         self._publisher.publish(
             TranscriptEvent(
                 type=TranscriptEventType.transcript_finalized,
                 session_id=job.session_id,
                 consultation_id=job.consultation_id,
-                merged_text=merged_text,
+                merged_text=merged_text or None,
                 missing_chunks=missing_chunks or None,
             )
         )
@@ -105,7 +112,7 @@ class TranscriptFinalizer:
             db,
             job.consultation_id,
         )
-        if consultation is not None:
+        if consultation is not None and transcript is not None and merged_text.strip():
             AIJobRepository.create_job(
                 db,
                 consultation_id=job.consultation_id,

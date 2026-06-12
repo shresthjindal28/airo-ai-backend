@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     STT_PROVIDER: str = "sarvam"
     SARVAM_API_KEY: str | None = None
     SARVAM_MODEL: str = "saaras:v3"
-    SARVAM_MODE: str = "transcribe"
+    SARVAM_MODE: str = "translate"
 
     EMBEDDING_PROVIDER: str = "local"
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"

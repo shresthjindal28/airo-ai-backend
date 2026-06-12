@@ -9,6 +9,28 @@ from app.providers.speech.base import SpeechToTextProvider, TranscriptionResult
 
 logger = get_logger(__name__)
 
+_MIME_TO_CODEC: dict[str, str] = {
+    "audio/webm": "webm",
+    "audio/webm;codecs=opus": "webm",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "audio/ogg": "ogg",
+    "audio/flac": "flac",
+}
+
+_MIME_TO_EXTENSION: dict[str, str] = {
+    "audio/webm": "webm",
+    "audio/webm;codecs=opus": "webm",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "audio/ogg": "ogg",
+    "audio/flac": "flac",
+}
+
 
 class SarvamProvider(SpeechToTextProvider):
 
@@ -31,10 +53,21 @@ class SarvamProvider(SpeechToTextProvider):
     ) -> TranscriptionResult:
         started = time.perf_counter()
 
+        normalized_mime = mime_type.split(";")[0].strip().lower()
+        extension = _MIME_TO_EXTENSION.get(mime_type.lower()) or _MIME_TO_EXTENSION.get(
+            normalized_mime,
+            "webm",
+        )
+        codec = _MIME_TO_CODEC.get(mime_type.lower()) or _MIME_TO_CODEC.get(
+            normalized_mime,
+            "webm",
+        )
+
         kwargs: dict = {
-            "file": io.BytesIO(audio_bytes),
+            "file": (f"chunk.{extension}", io.BytesIO(audio_bytes)),
             "model": settings.SARVAM_MODEL,
             "mode": settings.SARVAM_MODE,
+            "input_audio_codec": codec,
         }
 
         if language:
@@ -48,13 +81,14 @@ class SarvamProvider(SpeechToTextProvider):
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         logger.info(
-            "Sarvam transcription completed bytes=%s latency_ms=%s",
+            "Sarvam transcription completed bytes=%s mode=%s latency_ms=%s",
             len(audio_bytes),
+            settings.SARVAM_MODE,
             latency_ms,
         )
 
         return TranscriptionResult(
             text=text.strip(),
             confidence_score=float(confidence) if confidence is not None else None,
-            language=detected_language,
+            language=detected_language or "en",
         )

@@ -57,12 +57,47 @@ class TranscriptionService:
 
         started = time.perf_counter()
         audio_bytes = StorageService.download_object(chunk.object_key)
+
+        if len(audio_bytes) < 512:
+            logger.info(
+                "Skipping transcription for near-empty chunk chunk_id=%s bytes=%s",
+                chunk.id,
+                len(audio_bytes),
+            )
+            AudioChunkRepository.update_status(db, chunk, ChunkStatus.processed)
+            return
+
         provider = get_speech_to_text_provider()
-        result = provider.transcribe_chunk(
-            audio_bytes,
-            mime_type=chunk.mime_type,
-        )
+        try:
+            result = provider.transcribe_chunk(
+                audio_bytes,
+                mime_type=chunk.mime_type,
+            )
+        except Exception as exc:
+            error_message = str(exc).lower()
+            if "failed to read the file" in error_message or "audio format" in error_message:
+                logger.warning(
+                    "Unreadable audio chunk chunk_id=%s chunk_number=%s bytes=%s",
+                    chunk.id,
+                    chunk.chunk_number,
+                    len(audio_bytes),
+                )
+                AudioChunkRepository.update_status(db, chunk, ChunkStatus.failed)
+                raise TranscriptionServiceError(
+                    f"Unreadable audio for chunk {chunk.chunk_number}"
+                ) from exc
+            raise
+
         processing_latency_ms = int((time.perf_counter() - started) * 1000)
+
+        if not result.text.strip():
+            logger.info(
+                "No speech detected in chunk chunk_id=%s chunk_number=%s",
+                chunk.id,
+                chunk.chunk_number,
+            )
+            AudioChunkRepository.update_status(db, chunk, ChunkStatus.processed)
+            return
 
         start_time_ms = max(0, (chunk.chunk_number - 1) * chunk.duration_ms)
         end_time_ms = start_time_ms + chunk.duration_ms

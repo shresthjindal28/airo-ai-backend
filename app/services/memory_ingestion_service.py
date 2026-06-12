@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
@@ -249,9 +250,19 @@ class MemoryIngestionService:
                 last_updated_at=now,
             )
             db.add(profile)
+            try:
+                with db.begin_nested():
+                    db.flush()
+            except IntegrityError:
+                profile = db.scalars(stmt).first()
+                if profile is None:
+                    raise
+                profile.summary = summary
+                profile.last_updated_at = now
+                db.flush()
         else:
             profile.summary = summary
             profile.last_updated_at = now
+            db.flush()
 
-        db.flush()
         return profile
