@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
 from app.workers.executor import JobExecutor
 from app.workers.poller import JobPoller
+from app.workers.worker_heartbeat import WorkerHeartbeat
 
 logger = get_logger(__name__)
 
@@ -20,6 +21,11 @@ def main() -> None:
     shutdown_event = threading.Event()
     executor = JobExecutor()
     poller = JobPoller(executor, shutdown_event)
+    heartbeat = WorkerHeartbeat(
+        get_active_jobs=lambda: executor.active_jobs,
+        get_jobs_processed=lambda: executor.jobs_processed,
+        get_jobs_failed=lambda: executor.jobs_failed,
+    )
 
     def handle_shutdown(signum: int, _frame: object) -> None:
         signal_name = signal.Signals(signum).name
@@ -37,8 +43,10 @@ def main() -> None:
         preload_embedding_model()
 
     try:
+        heartbeat.start()
         poller.run()
     finally:
+        heartbeat.stop()
         logger.info("Shutting down executor")
         executor.shutdown(wait=True)
         logger.info("airo-ai worker stopped")

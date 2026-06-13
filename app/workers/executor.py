@@ -18,6 +18,8 @@ from app.models.ai_job import AIJob
 from app.models.enums import AIJobType
 from app.repositories.ai_job_repository import AIJobRepository
 from app.services.job_service import JobService
+from app.services.monitoring_service import MonitoringService
+from datetime import UTC, datetime
 
 logger = get_logger(__name__)
 
@@ -46,6 +48,23 @@ class JobExecutor:
         self._pool = ThreadPoolExecutor(max_workers=settings.WORKER_CONCURRENCY)
         self._lock = threading.Lock()
         self._active_count = 0
+        self._jobs_processed = 0
+        self._jobs_failed = 0
+
+    @property
+    def active_jobs(self) -> int:
+        with self._lock:
+            return self._active_count
+
+    @property
+    def jobs_processed(self) -> int:
+        with self._lock:
+            return self._jobs_processed
+
+    @property
+    def jobs_failed(self) -> int:
+        with self._lock:
+            return self._jobs_failed
 
     @property
     def available_slots(self) -> int:
@@ -65,6 +84,9 @@ class JobExecutor:
         return True
 
     def _process_job(self, job_id: uuid.UUID) -> None:
+        started_at = datetime.now(UTC)
+        job_type_value = "unknown"
+        retry_count = 0
         try:
             db = SessionLocal()
             try:
@@ -73,11 +95,15 @@ class JobExecutor:
                     logger.error("Job not found after claim job_id=%s", job_id)
                     return
 
+                job_type_value = job.job_type.value
+                retry_count = job.attempt_count
+
                 handler = _get_handlers().get(job.job_type)
                 if handler is None:
                     error = f"Unknown job type: {job.job_type}"
                     logger.error("Failing job job_id=%s reason=%s", job.id, error)
                     JobService.fail_job(db, job.id, error)
+                    self._record_failure(db, job, started_at, retry_count, error)
                     return
 
                 with ThreadPoolExecutor(max_workers=1) as handler_pool:
@@ -90,9 +116,11 @@ class JobExecutor:
                         )
                         logger.error("Job timed out job_id=%s", job.id)
                         JobService.handle_job_failure(db, job.id, error)
+                        self._record_failure(db, job, started_at, retry_count, error)
                         return
 
                 JobService.complete_job(db, job.id)
+                self._record_success(db, job, started_at, retry_count)
                 logger.info(
                     "Job completed successfully job_id=%s type=%s",
                     job.id,
@@ -102,7 +130,10 @@ class JobExecutor:
             except Exception as exc:
                 logger.exception("Job failed job_id=%s error=%s", job_id, exc)
                 try:
+                    job = AIJobRepository.get_job_by_id(db, job_id)
                     JobService.handle_job_failure(db, job_id, str(exc))
+                    if job:
+                        self._record_failure(db, job, started_at, retry_count, str(exc))
                 except Exception:
                     logger.exception(
                         "Failed to record job failure job_id=%s",
@@ -113,3 +144,47 @@ class JobExecutor:
         finally:
             with self._lock:
                 self._active_count -= 1
+
+    def _record_success(
+        self,
+        db,
+        job: AIJob,
+        started_at: datetime,
+        retry_count: int,
+    ) -> None:
+        with self._lock:
+            self._jobs_processed += 1
+        try:
+            MonitoringService.record_job_execution(
+                db,
+                job_id=job.id,
+                job_type=job.job_type.value,
+                started_at=started_at,
+                status="completed",
+                retry_count=retry_count,
+            )
+        except Exception:
+            logger.exception("Failed to record job execution job_id=%s", job.id)
+
+    def _record_failure(
+        self,
+        db,
+        job: AIJob,
+        started_at: datetime,
+        retry_count: int,
+        error: str,
+    ) -> None:
+        with self._lock:
+            self._jobs_failed += 1
+        try:
+            MonitoringService.record_job_execution(
+                db,
+                job_id=job.id,
+                job_type=job.job_type.value,
+                started_at=started_at,
+                status="failed",
+                retry_count=retry_count,
+                error=error,
+            )
+        except Exception:
+            logger.exception("Failed to record job failure job_id=%s", job.id)

@@ -80,6 +80,7 @@ class SarvamProvider(SpeechToTextProvider):
         detected_language = getattr(response, "language_code", None) or language
 
         latency_ms = int((time.perf_counter() - started) * 1000)
+        audio_seconds = len(audio_bytes) / 32000.0
         logger.info(
             "Sarvam transcription completed bytes=%s mode=%s latency_ms=%s",
             len(audio_bytes),
@@ -87,8 +88,28 @@ class SarvamProvider(SpeechToTextProvider):
             latency_ms,
         )
 
+        self._log_usage(audio_seconds, len(text.strip()))
+
         return TranscriptionResult(
             text=text.strip(),
             confidence_score=float(confidence) if confidence is not None else None,
             language=detected_language or "en",
         )
+
+    def _log_usage(self, audio_seconds: float, characters: int) -> None:
+        try:
+            from app.core.database import SessionLocal
+            from app.services.monitoring_service import MonitoringService
+
+            db = SessionLocal()
+            try:
+                MonitoringService.log_stt_usage(
+                    db,
+                    provider="sarvam",
+                    audio_seconds=audio_seconds,
+                    characters=characters,
+                )
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("Failed to log Sarvam STT usage")
