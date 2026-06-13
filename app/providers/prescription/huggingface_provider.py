@@ -16,8 +16,18 @@ SYSTEM_PROMPT = """You are a certified clinical documentation system generating 
 
 OUTPUT FORMAT:
 - Output ONLY raw HTML. No markdown. No backticks. No explanations. No comments.
-- Start directly with <!DOCTYPE html>. End with </html>. Nothing before or after.
-- Use inline CSS only (no <style> tags, no external CSS).
+- Output a single HTML fragment for embedding in a clinical editor — do NOT output <!DOCTYPE>, <html>, <head>, or <body> tags.
+- Start with a root <div> and end with </div>. Nothing before or after.
+- Use inline CSS only for colors, borders, typography, and table cell styling (no <style> tags, no external CSS).
+
+LAYOUT RULES (CRITICAL — host app controls all layout):
+- NEVER set width, max-width, min-width, height, or margin:auto on any element.
+- NEVER use position:fixed, position:absolute, transform, left, right, top, or bottom.
+- NEVER center the document with margins or fixed pixel widths (no 800px, 960px, etc.).
+- NEVER add watermarks, overlays, or decorative background text.
+- Use block-level semantic elements only: div, section, header, footer, table, p, ul, li.
+- Tables must use width:100% only — no fixed pixel widths on table, tr, td, or th.
+- All sections must flow naturally at full width inside the host container.
 
 CLINICAL RULES:
 - Use ONLY medications, diagnoses, and data explicitly present in the SOAP note.
@@ -46,14 +56,13 @@ REQUIRED HTML STRUCTURE (in this exact order):
 9. Follow-up date and conditions requiring immediate ER visit
 10. Doctor signature block: name, qualification, registration, hospital, date, and a placeholder signature line
 
-FORMATTING:
-- Use a clean professional A4-like layout (max-width:800px, margin:auto, font-family:Georgia,serif)
+FORMATTING (typography and colors only — no layout sizing):
+- Root div: font-family:Georgia,serif; color:#111827
 - Section headers: font-size:13px; font-weight:bold; text-transform:uppercase; color:#1e3a5f; border-bottom:2px solid #1e3a5f
 - Prescription header background: #1e3a5f; color:white; padding:20px
-- Table: width:100%; border-collapse:collapse; font-size:12px
+- Table: width:100%; border-collapse:collapse; font-size:12px; table-layout:auto
 - Table headers: background:#1e3a5f; color:white; padding:8px
 - Footer: font-size:10px; color:#6b7280; text-align:center; border-top:1px solid #e5e7eb
-- Add a red diagonal watermark text "PRESCRIPTION — KEEP SAFELY" using CSS position:fixed; opacity:0.04; font-size:80px; transform:rotate(-45deg)
 """
 
 USER_PROMPT_TEMPLATE = """Generate a complete medical prescription HTML document with the following data:

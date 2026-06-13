@@ -15,7 +15,55 @@ def extract_html_document(text: str) -> str:
     end = cleaned.lower().rfind(">")
     if start == -1 or end == -1:
         raise ValueError("Model response did not contain HTML")
-    return cleaned[start : end + 1]
+    return sanitize_prescription_layout(cleaned[start : end + 1])
+
+
+_LAYOUT_STYLE_PATTERN = re.compile(
+    r"(?<![\w-])(?:max-width|min-width|width|margin(?:-left|-right|-top|-bottom)?|left|right|top|bottom|transform|position)\s*:\s*[^;\"']+;?",
+    re.IGNORECASE,
+)
+_CENTERING_MARGIN_PATTERN = re.compile(
+    r"\bmargin\s*:\s*(?:\d+px\s+)?auto\b[^;\"']*",
+    re.IGNORECASE,
+)
+
+
+def sanitize_prescription_layout(html: str) -> str:
+    """Strip layout-breaking inline styles the model sometimes adds."""
+    cleaned = _unwrap_body_content(html)
+    cleaned = re.sub(r"<style[\s\S]*?</style>", "", cleaned, flags=re.IGNORECASE)
+
+    def _clean_style_attr(match: re.Match[str]) -> str:
+        quote = match.group(1)
+        style_value = match.group(2)
+        cleaned_style = _LAYOUT_STYLE_PATTERN.sub("", style_value)
+        cleaned_style = _CENTERING_MARGIN_PATTERN.sub("", cleaned_style)
+        cleaned_style = re.sub(r";{2,}", ";", cleaned_style).strip(" ;")
+        return f" style={quote}{cleaned_style}{quote}" if cleaned_style else ""
+
+    cleaned = re.sub(
+        r'\sstyle=(["\'])(.*?)\1',
+        _clean_style_attr,
+        cleaned,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    cleaned = re.sub(
+        r"<(html|head|body)[^>]*>|</(html|head|body)>",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"<!DOCTYPE[^>]*>", "", cleaned, flags=re.IGNORECASE)
+
+    return cleaned.strip()
+
+
+def _unwrap_body_content(html: str) -> str:
+    body_match = re.search(r"<body[^>]*>([\s\S]*?)</body>", html, re.IGNORECASE)
+    if body_match:
+        return body_match.group(1).strip()
+    return html.strip()
 
 
 def html_to_plain_text(html: str) -> str:
