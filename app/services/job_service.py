@@ -86,6 +86,6 @@ class JobService:
             raise JobNotFoundError(f"Job not found: {job_id}")
 
         if job.attempt_count >= settings.MAX_JOB_ATTEMPTS:
-            return AIJobRepository.mark_failed(db, job, error_message)
+            return AIJobRepository.move_to_dead_letter(db, job, error_message)
 
         return AIJobRepository.requeue_job(db, job, error_message)

@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.ai_job import AIJob
 from app.publishers.redis_publisher import TranscriptEventPublisher
@@ -122,19 +123,20 @@ class TranscriptFinalizer:
                 metadata=None,
                 status=AIJobStatus.queued,
             )
-            AIJobRepository.create_job(
-                db,
-                consultation_id=job.consultation_id,
-                job_type=AIJobType.memory_ingestion,
-                session_id=job.session_id,
-                priority=JobPriority.normal,
-                metadata={
-                    "patient_id": str(consultation.patient_id),
-                    "source_type": "transcript",
-                    "source_id": str(transcript.id),
-                },
-                status=AIJobStatus.queued,
-            )
+            if settings.MEMORY_INGEST_TRANSCRIPT_SOURCES:
+                AIJobRepository.create_job(
+                    db,
+                    consultation_id=job.consultation_id,
+                    job_type=AIJobType.memory_ingestion,
+                    session_id=job.session_id,
+                    priority=JobPriority.normal,
+                    metadata={
+                        "patient_id": str(consultation.patient_id),
+                        "source_type": "transcript",
+                        "source_id": str(transcript.id),
+                    },
+                    status=AIJobStatus.queued,
+                )
 
         logger.info(
             "Transcript finalized session_id=%s segments=%s missing=%s chars=%s",

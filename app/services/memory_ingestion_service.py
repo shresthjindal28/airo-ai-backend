@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.ai_job import AIJob
 from app.models.enums import MemorySourceType
@@ -194,6 +195,10 @@ class MemoryIngestionService:
         consultation_id: uuid.UUID,
     ) -> tuple[str, str, dict[str, Any] | None]:
         if source_type == MemorySourceType.transcript:
+            if not settings.MEMORY_INGEST_TRANSCRIPT_SOURCES:
+                raise MemoryIngestionError(
+                    "Transcript memory ingestion is disabled; ingest SOAP notes and approved prescriptions only"
+                )
             transcript = TranscriptRepository.get_by_consultation(db, consultation_id)
             if transcript is None:
                 raise MemoryIngestionError("Transcript not found for consultation")

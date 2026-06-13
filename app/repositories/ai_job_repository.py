@@ -1,13 +1,24 @@
+import random
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from typing import Any
 
 from app.models.ai_job import AIJob
+from app.models.dead_letter_job import DeadLetterJob
 from app.models.enums import AIJobStatus, AIJobType, JobPriority
+
+_BASE_BACKOFF_SECONDS = 5
+_MAX_BACKOFF_SECONDS = 300
+
+
+def _retry_delay_seconds(attempt_count: int) -> float:
+    exp = min(_MAX_BACKOFF_SECONDS, _BASE_BACKOFF_SECONDS * (2 ** max(0, attempt_count - 1)))
+    jitter = random.uniform(0, exp * 0.25)
+    return min(_MAX_BACKOFF_SECONDS, exp + jitter)
 
 
 class AIJobRepository:
@@ -49,10 +60,14 @@ class AIJobRepository:
             (AIJob.priority == JobPriority.low, 3),
             else_=4,
         )
+        now = datetime.now(UTC)
 
         stmt = (
             select(AIJob)
-            .where(AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]))
+            .where(
+                AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]),
+                or_(AIJob.retry_after.is_(None), AIJob.retry_after <= now),
+            )
             .order_by(priority_order, AIJob.created_at.asc())
             .limit(limit)
         )
@@ -67,10 +82,14 @@ class AIJobRepository:
             (AIJob.priority == JobPriority.low, 3),
             else_=4,
         )
+        now = datetime.now(UTC)
 
         stmt = (
             select(AIJob)
-            .where(AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]))
+            .where(
+                AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]),
+                or_(AIJob.retry_after.is_(None), AIJob.retry_after <= now),
+            )
             .order_by(priority_order, AIJob.created_at.asc())
             .limit(1)
             .with_for_update(skip_locked=True)
@@ -103,6 +122,7 @@ class AIJobRepository:
         job.status = AIJobStatus.completed
         job.completed_at = datetime.now(UTC)
         job.error_message = None
+        job.retry_after = None
         db.commit()
         db.refresh(job)
         return job
@@ -116,6 +136,7 @@ class AIJobRepository:
         job.status = AIJobStatus.failed
         job.error_message = error_message
         job.completed_at = datetime.now(UTC)
+        job.retry_after = None
         db.commit()
         db.refresh(job)
         return job
@@ -129,9 +150,36 @@ class AIJobRepository:
 
     @staticmethod
     def requeue_job(db: Session, job: AIJob, error_message: str) -> AIJob:
+        delay = _retry_delay_seconds(job.attempt_count)
         job.status = AIJobStatus.queued
         job.started_at = None
         job.error_message = error_message
+        job.retry_after = datetime.now(UTC) + timedelta(seconds=delay)
         db.commit()
         db.refresh(job)
         return job
+
+    @staticmethod
+    def move_to_dead_letter(db: Session, job: AIJob, error_message: str) -> DeadLetterJob:
+        now = datetime.now(UTC)
+        dlq = DeadLetterJob(
+            id=uuid.uuid4(),
+            original_job_id=job.id,
+            consultation_id=job.consultation_id,
+            session_id=job.session_id,
+            job_type=job.job_type,
+            priority=job.priority,
+            attempt_count=job.attempt_count,
+            error_message=error_message,
+            metadata_=job.metadata_,
+            failed_at=now,
+            created_at=job.created_at,
+        )
+        db.add(dlq)
+        job.status = AIJobStatus.failed
+        job.error_message = error_message
+        job.completed_at = now
+        job.retry_after = None
+        db.commit()
+        db.refresh(dlq)
+        return dlq

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str = ""
     R2_ENDPOINT_URL: str
 
+    TRANSCRIPT_ARCHIVE_HOT_DAYS: int = 90
+    TRANSCRIPT_ARCHIVE_BATCH_SIZE: int = 50
+    AUDIO_RETENTION_DAYS: int = 30
+    AUDIO_RETENTION_BATCH_SIZE: int = 200
+    MEMORY_INGEST_TRANSCRIPT_SOURCES: bool = False
+
     STT_PROVIDER: str = "sarvam"
     SARVAM_API_KEY: str | None = None
     SARVAM_MODEL: str = "saaras:v3"
