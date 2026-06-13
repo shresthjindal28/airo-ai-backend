@@ -74,7 +74,11 @@ class AIJobRepository:
         return list(db.scalars(stmt).all())
 
     @staticmethod
-    def claim_job(db: Session) -> AIJob | None:
+    def claim_job(
+        db: Session,
+        *,
+        job_types: frozenset[AIJobType] | None = None,
+    ) -> AIJob | None:
         priority_order = case(
             (AIJob.priority == JobPriority.critical, 0),
             (AIJob.priority == JobPriority.high, 1),
@@ -84,12 +88,16 @@ class AIJobRepository:
         )
         now = datetime.now(UTC)
 
+        filters = [
+            AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]),
+            or_(AIJob.retry_after.is_(None), AIJob.retry_after <= now),
+        ]
+        if job_types:
+            filters.append(AIJob.job_type.in_(list(job_types)))
+
         stmt = (
             select(AIJob)
-            .where(
-                AIJob.status.in_([AIJobStatus.pending, AIJobStatus.queued]),
-                or_(AIJob.retry_after.is_(None), AIJob.retry_after <= now),
-            )
+            .where(*filters)
             .order_by(priority_order, AIJob.created_at.asc())
             .limit(1)
             .with_for_update(skip_locked=True)

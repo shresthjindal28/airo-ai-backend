@@ -45,8 +45,9 @@ def _get_handlers() -> dict[AIJobType, object]:
 
 class JobExecutor:
 
-    def __init__(self) -> None:
-        self._pool = ThreadPoolExecutor(max_workers=settings.WORKER_CONCURRENCY)
+    def __init__(self, max_workers: int | None = None) -> None:
+        self._max_workers = max_workers or settings.WORKER_CONCURRENCY
+        self._pool = ThreadPoolExecutor(max_workers=self._max_workers)
         self._lock = threading.Lock()
         self._active_count = 0
         self._jobs_processed = 0
@@ -68,16 +69,20 @@ class JobExecutor:
             return self._jobs_failed
 
     @property
+    def max_workers(self) -> int:
+        return self._max_workers
+
+    @property
     def available_slots(self) -> int:
         with self._lock:
-            return max(0, settings.WORKER_CONCURRENCY - self._active_count)
+            return max(0, self._max_workers - self._active_count)
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)
 
     def submit(self, job: AIJob) -> bool:
         with self._lock:
-            if self._active_count >= settings.WORKER_CONCURRENCY:
+            if self._active_count >= self._max_workers:
                 return False
             self._active_count += 1
 
@@ -86,8 +91,9 @@ class JobExecutor:
 
     def _process_job(self, job_id: uuid.UUID) -> None:
         started_at = datetime.now(UTC)
-        job_type_value = "unknown"
         retry_count = 0
+        handler_error: str | None = None
+
         try:
             db = SessionLocal()
             try:
@@ -96,9 +102,7 @@ class JobExecutor:
                     logger.error("Job not found after claim job_id=%s", job_id)
                     return
 
-                job_type_value = job.job_type.value
                 retry_count = job.attempt_count
-
                 handler = _get_handlers().get(job.job_type)
                 if handler is None:
                     error = f"Unknown job type: {job.job_type}"
@@ -107,18 +111,36 @@ class JobExecutor:
                     self._record_failure(db, job, started_at, retry_count, error)
                     return
 
-                with ThreadPoolExecutor(max_workers=1) as handler_pool:
-                    future = handler_pool.submit(handler.run, job)
-                    try:
-                        future.result(timeout=settings.JOB_TIMEOUT_SECONDS)
-                    except FuturesTimeoutError:
-                        error = (
-                            f"Job timed out after {settings.JOB_TIMEOUT_SECONDS}s"
+                job_ref = job
+            finally:
+                db.close()
+
+            with ThreadPoolExecutor(max_workers=1) as handler_pool:
+                future = handler_pool.submit(handler.run, job_ref)
+                try:
+                    future.result(timeout=settings.JOB_TIMEOUT_SECONDS)
+                except FuturesTimeoutError:
+                    handler_error = (
+                        f"Job timed out after {settings.JOB_TIMEOUT_SECONDS}s"
+                    )
+                    logger.error("Job timed out job_id=%s", job_id)
+                except Exception as exc:
+                    handler_error = str(exc)
+                    logger.exception("Job failed job_id=%s error=%s", job_id, exc)
+
+            db = SessionLocal()
+            try:
+                job = AIJobRepository.get_job_by_id(db, job_id)
+                if handler_error:
+                    if job:
+                        JobService.handle_job_failure(db, job_id, handler_error)
+                        self._record_failure(
+                            db, job, started_at, retry_count, handler_error
                         )
-                        logger.error("Job timed out job_id=%s", job.id)
-                        JobService.handle_job_failure(db, job.id, error)
-                        self._record_failure(db, job, started_at, retry_count, error)
-                        return
+                    return
+
+                if job is None:
+                    return
 
                 JobService.complete_job(db, job.id)
                 self._record_success(db, job, started_at, retry_count)
@@ -127,19 +149,6 @@ class JobExecutor:
                     job.id,
                     job.job_type,
                 )
-
-            except Exception as exc:
-                logger.exception("Job failed job_id=%s error=%s", job_id, exc)
-                try:
-                    job = AIJobRepository.get_job_by_id(db, job_id)
-                    JobService.handle_job_failure(db, job_id, str(exc))
-                    if job:
-                        self._record_failure(db, job, started_at, retry_count, str(exc))
-                except Exception:
-                    logger.exception(
-                        "Failed to record job failure job_id=%s",
-                        job_id,
-                    )
             finally:
                 db.close()
         finally:

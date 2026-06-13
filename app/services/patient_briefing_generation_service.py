@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.cache import keys
-from app.cache.redis_client import redis_set_json
+from app.cache.redis_client import redis_delete_pattern, redis_incr, redis_set_json
 from app.core.config import settings
 from app.models.patient_memory_profile import PatientMemoryProfile
 from app.services.extractive_profile import parse_profile
@@ -98,4 +98,7 @@ class PatientBriefingGenerationService:
             },
             ttl_seconds=settings.REDIS_PATIENT_CACHE_TTL_SECONDS,
         )
+        redis_delete_pattern(keys.patient_retrieval_prefix(patient_id))
+        redis_delete_pattern(keys.patient_response_prefix(patient_id))
+        redis_incr(keys.patient_memory_version(patient_id))
         return briefing

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.ai_job import AIJob
-from app.models.enums import AIJobStatus
+from app.models.enums import AIJobStatus, AIJobType
 from app.repositories.ai_job_repository import AIJobRepository
 
 
@@ -19,8 +19,12 @@ class InvalidJobStateError(Exception):
 class JobService:
 
     @staticmethod
-    def claim_next_job(db: Session) -> AIJob | None:
-        return AIJobRepository.claim_job(db)
+    def claim_next_job(
+        db: Session,
+        *,
+        job_types: frozenset[AIJobType] | None = None,
+    ) -> AIJob | None:
+        return AIJobRepository.claim_job(db, job_types=job_types)
 
     @staticmethod
     def complete_job(db: Session, job_id: uuid.UUID) -> AIJob:

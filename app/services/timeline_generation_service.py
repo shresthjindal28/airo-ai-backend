@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.cache import keys
-from app.cache.invalidation import invalidate_patient_caches
 from app.cache.redis_client import redis_set_json
 from app.core.config import settings
 from app.models.consultation import Consultation
@@ -118,5 +117,4 @@ class TimelineGenerationService:
             timeline,
             ttl_seconds=settings.REDIS_TIMELINE_CACHE_TTL_SECONDS,
         )
-        invalidate_patient_caches(patient_id)
         return timeline

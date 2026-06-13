@@ -1,4 +1,5 @@
 import json
+import threading
 from functools import lru_cache
 from typing import Any
 
@@ -6,15 +7,35 @@ import redis
 
 from app.core.config import settings
 
+_pool_lock = threading.Lock()
+_redis_pool: redis.ConnectionPool | None = None
+
+
+def _build_pool() -> redis.ConnectionPool:
+    return redis.ConnectionPool.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+        max_connections=100,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        socket_keepalive=True,
+        health_check_interval=30,
+        retry_on_timeout=True,
+    )
+
+
+def get_redis_pool() -> redis.ConnectionPool:
+    global _redis_pool
+    if _redis_pool is None:
+        with _pool_lock:
+            if _redis_pool is None:
+                _redis_pool = _build_pool()
+    return _redis_pool
+
 
 @lru_cache
 def get_redis_client() -> redis.Redis:
-    return redis.Redis.from_url(
-        settings.REDIS_URL,
-        decode_responses=True,
-        socket_connect_timeout=2,
-        socket_timeout=2,
-    )
+    return redis.Redis(connection_pool=get_redis_pool())
 
 
 def redis_set_json(key: str, value: Any, *, ttl_seconds: int) -> bool:

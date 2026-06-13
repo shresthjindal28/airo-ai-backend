@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     WORKER_ENABLED: bool = True
-    WORKER_CONCURRENCY: int = 2
+    WORKER_CONCURRENCY: int = 12
     POLL_INTERVAL_SECONDS: float = 2.0
     JOB_TIMEOUT_SECONDS: int = 300
     MAX_JOB_ATTEMPTS: int = 3
