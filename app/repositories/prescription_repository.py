@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import app.models  # noqa: F401
 from app.models.prescription import Prescription
 
 

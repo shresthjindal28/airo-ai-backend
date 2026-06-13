@@ -15,8 +15,12 @@ app = FastAPI(
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "stt_provider": settings.STT_PROVIDER,
+        "sarvam_configured": bool(settings.SARVAM_API_KEY),
+    }
 
 
 @app.get("/ready")

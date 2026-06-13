@@ -6,6 +6,7 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
+import app.models  # noqa: F401 — register all ORM tables before job handlers load
 from app.jobs.memory_ingestion import MemoryIngestionJob
 from app.jobs.memory_reindex import MemoryReindexJob
 from app.jobs.patient_briefing_generation import PatientBriefingGenerationJob

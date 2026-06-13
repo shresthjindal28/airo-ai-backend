@@ -7,11 +7,13 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from app.cache.redis_client import get_redis_client, redis_set_json
+from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 WORKER_KEY_PREFIX = "airo:worker:"
+STT_STATUS_KEY = "airo:meta:stt:status"
 HEARTBEAT_INTERVAL_SECONDS = 15
 WORKER_TTL_SECONDS = 45
 
@@ -48,8 +50,20 @@ class WorkerHeartbeat:
             "jobs_processed": self._get_jobs_processed(),
             "jobs_failed": self._get_jobs_failed(),
             "active_jobs": self._get_active_jobs(),
+            "stt_provider": settings.STT_PROVIDER,
+            "sarvam_configured": bool(settings.SARVAM_API_KEY),
         }
         redis_set_json(self._redis_key(), payload, ttl_seconds=WORKER_TTL_SECONDS)
+        redis_set_json(
+            STT_STATUS_KEY,
+            {
+                "stt_provider": settings.STT_PROVIDER,
+                "sarvam_configured": bool(settings.SARVAM_API_KEY),
+                "worker_id": self.worker_id,
+                "last_heartbeat": payload["last_heartbeat"],
+            },
+            ttl_seconds=WORKER_TTL_SECONDS,
+        )
 
     def _loop(self) -> None:
         while not self._shutdown.wait(HEARTBEAT_INTERVAL_SECONDS):

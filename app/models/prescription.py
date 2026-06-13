@@ -12,15 +12,14 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 class Prescription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "prescriptions"
 
+    # Plain UUID columns — worker does not own doctors/patients ORM tables.
     doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("doctors.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("patients.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

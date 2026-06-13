@@ -1,5 +1,6 @@
 from app.core.database import SessionLocal
 from app.core.logging import get_logger
+import app.models  # noqa: F401
 from app.jobs.base import JobHandler
 from app.models.ai_job import AIJob
 from app.services.prescription_generation_service import (

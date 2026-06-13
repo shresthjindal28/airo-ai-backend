@@ -4,6 +4,7 @@ import threading
 
 from app.core.config import settings
 from app.core.logging import get_logger, setup_logging
+import app.models  # noqa: F401 — register ORM metadata (Doctor/Patient stubs for FKs)
 from app.workers.executor import JobExecutor
 from app.workers.poller import JobPoller
 from app.workers.worker_heartbeat import WorkerHeartbeat
