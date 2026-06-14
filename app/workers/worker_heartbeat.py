@@ -14,8 +14,8 @@ logger = get_logger(__name__)
 
 WORKER_KEY_PREFIX = "airo:worker:"
 STT_STATUS_KEY = "airo:meta:stt:status"
-HEARTBEAT_INTERVAL_SECONDS = 15
-WORKER_TTL_SECONDS = 45
+HEARTBEAT_INTERVAL_SECONDS = 45
+WORKER_TTL_SECONDS = 120
 
 
 class WorkerHeartbeat:
@@ -37,6 +37,7 @@ class WorkerHeartbeat:
         self._get_jobs_failed = get_jobs_failed
         self._shutdown = threading.Event()
         self._thread: threading.Thread | None = None
+        self._beat_count = 0
 
     def _redis_key(self) -> str:
         return f"{WORKER_KEY_PREFIX}{self.worker_id}"
@@ -54,16 +55,19 @@ class WorkerHeartbeat:
             "sarvam_configured": bool(settings.SARVAM_API_KEY),
         }
         redis_set_json(self._redis_key(), payload, ttl_seconds=WORKER_TTL_SECONDS)
-        redis_set_json(
-            STT_STATUS_KEY,
-            {
-                "stt_provider": settings.STT_PROVIDER,
-                "sarvam_configured": bool(settings.SARVAM_API_KEY),
-                "worker_id": self.worker_id,
-                "last_heartbeat": payload["last_heartbeat"],
-            },
-            ttl_seconds=WORKER_TTL_SECONDS,
-        )
+        # STT meta changes rarely — refresh every 3rd beat to cut Redis commands ~66%.
+        self._beat_count += 1
+        if self._beat_count == 1 or self._beat_count % 3 == 0:
+            redis_set_json(
+                STT_STATUS_KEY,
+                {
+                    "stt_provider": settings.STT_PROVIDER,
+                    "sarvam_configured": bool(settings.SARVAM_API_KEY),
+                    "worker_id": self.worker_id,
+                    "last_heartbeat": payload["last_heartbeat"],
+                },
+                ttl_seconds=WORKER_TTL_SECONDS,
+            )
 
     def _loop(self) -> None:
         while not self._shutdown.wait(HEARTBEAT_INTERVAL_SECONDS):

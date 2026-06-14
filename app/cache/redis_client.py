@@ -19,7 +19,7 @@ def _build_pool() -> redis.ConnectionPool:
         socket_connect_timeout=2,
         socket_timeout=2,
         socket_keepalive=True,
-        health_check_interval=30,
+        health_check_interval=0,
         retry_on_timeout=True,
     )
 
