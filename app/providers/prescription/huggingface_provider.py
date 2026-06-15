@@ -109,7 +109,7 @@ class HuggingFacePrescriptionProvider(PrescriptionProvider):
         )
 
         prompt = USER_PROMPT_TEMPLATE.format(
-            hospital_name=context.hospital_name or "AIRO Clinical Centre",
+            hospital_name=context.hospital_name or "Aevomed Clinical Centre",
             doctor_name=context.doctor_name,
             doctor_qualification=getattr(context, "doctor_qualification", "MBBS, MD"),
             doctor_registration=context.doctor_registration or "Not documented — consult physician",

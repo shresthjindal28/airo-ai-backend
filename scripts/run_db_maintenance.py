@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="AIRO database lifecycle maintenance")
+    parser = argparse.ArgumentParser(description="Aevomed database lifecycle maintenance")
     parser.add_argument(
         "--task",
         choices=["transcript-archive", "audio-retention", "all"],

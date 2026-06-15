@@ -1,6 +1,6 @@
 # airo-ai
 
-AI job worker service for AIRO. Processes transcription and transcript finalization jobs.
+AI job worker service for Aevomed. Processes transcription and transcript finalization jobs.
 
 ## Setup
 

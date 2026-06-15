@@ -25,7 +25,7 @@ class OpenAIPrescriptionProvider(PrescriptionProvider):
 
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         prompt = USER_PROMPT_TEMPLATE.format(
-            hospital_name=context.hospital_name or "AIRO Clinical",
+            hospital_name=context.hospital_name or "Aevomed Clinical",
             doctor_name=context.doctor_name,
             doctor_registration=context.doctor_registration or "—",
             consultation_date=context.consultation_date,

@@ -81,7 +81,7 @@ def build_fallback_prescription_html(context) -> str:
     ctx = context
     return f"""<div class="prescription">
   <header>
-    <h1>{ctx.hospital_name or "AIRO Clinical"}</h1>
+    <h1>{ctx.hospital_name or "Aevomed Clinical"}</h1>
     <h2>Medical Prescription</h2>
   </header>
   <section class="patient-details">
